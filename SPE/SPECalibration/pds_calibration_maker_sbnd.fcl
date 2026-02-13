@@ -37,3 +37,4 @@ physics:
 
 physics.analyzers.PMTGain.UseAllPMTs: true
 physics.analyzers.PMTGain.SelectedPMTs: [44,54]    # from 0 - 120. Does not get used if UsellPMTs. 
+physics.analyzers.PMTGain.nstdev: 2.2
