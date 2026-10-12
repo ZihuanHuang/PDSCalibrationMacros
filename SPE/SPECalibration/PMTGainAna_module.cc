@@ -104,10 +104,13 @@ namespace PDSCali{
     bool fDo_amp;
     bool fDo_integ; //which analysis do we want to do?
     bool fDo_hist;
+    bool fDo_nwvf;    //book/fill the per-PMT waveform counter (denominator for normalisation)
+    bool fCountOnly;  //if true, only count waveforms and skip all analysis (fast counter-only run)
 
     // Histograms to save:
     std::vector<TH1D *> avgspe;
     std::vector<TH1D *> amp;
+    std::vector<TH1D *> nwvf;   //per-PMT waveform counter (1-bin histo, filled once per waveform)
     std::vector<TH1D *> integ0;
     std::vector<TH1D *> integ1;
     std::vector<TH1D *> integ2;
@@ -116,6 +119,8 @@ namespace PDSCali{
     std::vector<TH1D *> integ5; 
     std::vector<int> navspes;
     int NBINS;
+    int    fAmpNbins;
+    double fAmpHi;
 
 
     // these two variables should be defined via .fcl 
@@ -156,8 +161,12 @@ namespace PDSCali{
     fCut = p.get < bool >("cut");
     fDo_avgspe = p.get < bool >("do_avgspe");
     fDo_amp = p.get < bool >("do_amp");
+    fAmpNbins = p.get<int>("amp_nbins");
+    fAmpHi    = p.get<double>("amp_hi");
     fDo_integ = p.get <bool >("do_integ");
     fDo_hist = p.get < bool >("do_hist");
+    fDo_nwvf   = p.get < bool >("do_nwvf",    true);   // count waveforms by default
+    fCountOnly = p.get < bool >("count_only", false);  // set true to only count (fast)
 
     auto const clockData = art::ServiceHandle<detinfo::DetectorClocksService const>()->DataForJob();
     fSampling = clockData.OpticalClock().Frequency(); // MHz
@@ -210,12 +219,19 @@ namespace PDSCali{
     for(unsigned int ihist=0;ihist<PMTIndexingVector.size();ihist++)
     {
 if (fDo_avgspe) {
-     avgspe.push_back(tfs->make< TH1D >(Form("avgspe_opchannel_%d", PMTIndexingVector[ihist]), Form("Average SPE Shape, channel %d;Samples from peak;Count",PMTIndexingVector[ihist]), NBINS, -fLowbin, fHibin)); // create histogram for average shape                
+     avgspe.push_back(tfs->make< TH1D >(Form("avgspe_opchannel_%d", PMTIndexingVector[ihist]), Form("Average SPE Shape, channel %d;Samples from peak;Count",PMTIndexingVector[ihist]), NBINS, -fLowbin, fHibin)); // create histogram for average shape     
      navspes.push_back(0);
      }
     
 if (fDo_amp) {
-     amp.push_back(tfs->make< TH1D >(Form("amp_opchannel_%d",PMTIndexingVector[ihist]), Form("Amplitude of SPEs, channel %d;Amplitude[ADC];Count",PMTIndexingVector[ihist]), 200, 0, 200)); // create histogram for amplitude
+     amp.push_back(tfs->make<TH1D>(Form("amp_opchannel_%d",PMTIndexingVector[ihist]),
+     Form("Amplitude of SPEs, channel %d;Amplitude[ADC];Count",PMTIndexingVector[ihist]),
+     fAmpNbins, 0, fAmpHi)); // create histogram for amplitude.    change the hard-coded range and bin setting
+      }
+if (fDo_nwvf) {
+     nwvf.push_back(tfs->make<TH1D>(Form("nwvf_opchannel_%d",PMTIndexingVector[ihist]),
+     Form("Waveform count, channel %d;;Waveforms",PMTIndexingVector[ihist]),
+     1, 0, 1)); // 1-bin counter; GetEntries() = number of waveforms for this PMT
       }
 //TH1D* newHist = tfs->make<TH1D>("newHist", TString::Format(";t (#mus);"), wvf.size(), 0, fEndTime - fStartTime);
 if (fDo_integ) {
@@ -311,6 +327,13 @@ std::ofstream outputFile("median.txt", std::ios_base::app);
       if(pmt_counter == -1) continue;   //if channel not found, then let's not do anything. 
       std::vector<int> opchannelList;
       if (std::find(fOpDetsToPlot.begin(), fOpDetsToPlot.end(), opdetType) == fOpDetsToPlot.end()) {continue;}
+
+      // Count this waveform for the PMT (one waveform ~ one readout). Placed
+      // before all later 'continue's so every processed waveform is counted,
+      // including quiet (0-SPE) ones. This is the denominator for normalisation.
+      if (fDo_nwvf) nwvf[pmt_counter]->Fill(0.5);
+      if (fCountOnly) continue;  // counter-only run: skip noise analysis + pulse finding
+
       histname.str(std::string());
       histname << "run_"<< e.id().run()
                << "event_" << fEvNumber
@@ -552,7 +575,7 @@ std::sort(sortedWVF.begin(), sortedWVF.end());
 if (fDo_avgspe) {
   for (int i=0; i<nspe; i++) { //iterate through the found spe positions
       Int_t peakbin = wvf_spet[i]; // get bin associated with peak time 
-   if(peakbin-fLowbin <0 || peakbin+fHibin>wvf_nbins) //aszelc addition—check to make sure the bin numbers do not cause an error
+   if(peakbin-fLowbin <0 || peakbin+fHibin+1>=wvf_nbins) //aszelc addition—check to make sure the bin numbers do not cause an error
       {continue;}
       
 //selection addition——prevent any peak with another peak 100ns before it from being added
@@ -566,7 +589,7 @@ if (fDo_avgspe) {
 
 
         for (int j=1; j<=NBINS; j++) { //loop over range surrounding peak
-            Double_t le_bin = (double)wvfm[peakbin-fLowbin+j]; //add the values to the histogram
+            Double_t le_bin = (double)wvfm.at(peakbin-fLowbin+j); //add the values to the histogram
             avgspe[pmt_counter]->AddBinContent(j,le_bin);
             }
     navspes[pmt_counter]++; //added one!
@@ -797,6 +820,7 @@ std::cout << "Total SPEs found: " << total_nspe << std::endl;
     { if (fDo_avgspe) { std::cout << "Normalising average SPEs..." << std::endl;
 
 	for( unsigned int ihist=0;ihist<PMTIndexingVector.size();ihist++){  //first loop on all relevant histograms
+        if(navspes[ihist]==0) continue;   // skip the channel without SPE
 	      for( int ix=1;ix<=avgspe[ihist]->GetSize();ix++)
 		{
 		     Double_t le_bin=avgspe[ihist]->GetBinContent(ix); //get a bin
@@ -804,6 +828,7 @@ std::cout << "Total SPEs found: " << total_nspe << std::endl;
                      //Double_t norm = -1 * le_bin * (navspes[ihist]-1) / navspes[ihist]; //amount to subtract to reduce le_bin to le_bin/navspes: CHECK THIS IS CORRECT-- maybe do 1 not -1
 		     //avgspe[ihist]->AddBinContent(ix, norm); //add it   // Andrzej: I'm not sure I understand what's going on here? 
 		} // end loop on smples
+    avgspe[ihist]->SetEntries(navspes[ihist]);   // set Entries as the SPE number instead of 403
 	}   // end loop on histograms.
   }
 }

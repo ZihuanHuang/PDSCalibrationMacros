@@ -36,5 +36,16 @@ physics:
 
 
 physics.analyzers.PMTGain.UseAllPMTs: true
-physics.analyzers.PMTGain.SelectedPMTs: [44,54]    # from 0 - 120. Does not get used if UsellPMTs. 
+physics.analyzers.PMTGain.SelectedPMTs: [0, 15, 24, 25, 26, 50, 74, 88, 89, 92, 93, 98, 109, 112]    # from 0 - 120. Does not get used if UsellPMTs. 
 physics.analyzers.PMTGain.nstdev: 2.2
+
+physics.analyzers.PMTGain.do_avgspe: false
+physics.analyzers.PMTGain.do_amp: true
+physics.analyzers.PMTGain.do_integ: false
+physics.analyzers.PMTGain.do_hist: false
+
+physics.analyzers.PMTGain.do_nwvf: true
+physics.analyzers.PMTGain.count_only: false
+
+physics.analyzers.PMTGain.amp_hi: 40      # amplitude histogram upper edge [ADC]
+physics.analyzers.PMTGain.amp_nbins: 80   # 0.5 ADC/bin
