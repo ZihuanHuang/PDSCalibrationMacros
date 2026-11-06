@@ -5,6 +5,7 @@ These three files are used to fit the single-photoelectron (SPE) amplitude distr
 |`fitspe_sep.C`|Automatically fits SPE amplitude histograms for all channels found in the input ROOT file and produces diagnostic plots and a results table.|
 |`fitspe_manual_sep.C`|Manually refits selected channels after reviewing the automatic results, using user-defined fitting windows.|
 |`sep_voltage_settings.h`|Contains the September nominal operating voltage for each PMT, its target SPE amplitude (12.75 or 14.00 ADC), and off / hardware-voltage-limit flags. Both fitting macros include this header.|
+
 Before running, **change the directory in both** `fitspe_sep.C` **and** `fitspe_manual_sep.C` to your own output directory:
 ```
 TString base = gSystem->ExpandPathName("~/work/output/Sep/");
